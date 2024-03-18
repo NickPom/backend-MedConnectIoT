@@ -13,6 +13,7 @@ const { v4: uuidv4 } = require('uuid');
 const { ExpressPeerServer } = require("peer");
 const { Server } = require("socket.io");
 const csv = require("csv-stringify");
+const socket = require('socket.io');
 
 const auth = require('./auth');
 
@@ -527,18 +528,7 @@ app.get("/takeout", auth.authenticateToken, async (req, res) => {
     csv.stringify(data, { header: true, columns: columns }).pipe(res);
 });
 
-app.post('/iot', (req, res) => {
-    let body = ''; // Variabile per memorizzare il corpo della richiesta
 
-    req.on('data', (chunk) => {
-        body += chunk.toString(); // Aggiungi ogni pezzo di dati al corpo della richiesta
-    });
-
-    req.on('end', () => {
-        console.log('Corpo della richiesta:', body);
-        res.send('Dati ricevuti con successo!');
-    });  
-});
 
 // app.get("/alldevice", async (req, res) => {
 //     const sql_query = "select ni.id, ni.tipo, td.nome from nodo_iot ni, tipologia_device td WHERE ni.tipo  = td.ID ORDER BY ni.id  ASC";
@@ -579,6 +569,20 @@ app.get("/alldevice", async (req, res) => {
 
     try {
         let [rows] = await connection.query(sql_query);
+        res.status(200).send(rows);
+    } catch (err) {
+        console.log(err);
+        res.status(500).send();
+    }
+});
+
+app.get("/getIdDevicebyVisit", async (req, res) => {
+    
+    const sql_query = "SELECT nodo_iot.id FROM nodo_iot JOIN abbinato ON nodo_iot.id = abbinato.fk_nodo_iot JOIN partecipa ON partecipa.fk_visita = ? WHERE abbinato.fk_paziente = partecipa.fk_persona AND CURDATE() <= abbinato.data_fine AND nodo_iot.tipo=1 ORDER BY nodo_iot.id  ASC LIMIT 1;";
+    console.log(req.query.id_visita);
+    try {
+        let [rows] = await connection.query(sql_query, req.query.id_visita);
+       
         res.status(200).send(rows);
     } catch (err) {
         console.log(err);
@@ -655,9 +659,41 @@ app.post("/updatedevice", auth.authenticateToken, async (req, res) => {
     //console.log(res);
     
 });
+//--------------------------------------------------------------------------------------
 
 
+app.post('/iot', (req, res) => {
+    let body = ''; // Variabile per memorizzare il corpo della richiesta
+    //console.log(req.query.id);
+    req.on('data', (chunk) => {
+        body += chunk;
+        
+    });
 
+    req.on('end', () => {
+        // console.log('Corpo della richiesta:', body);
+        res.send('Dati ricevuti con successo!');
+
+        // Emit alla stanza chiamata con il visit id
+        let visitID = req.query.id;
+        //console.log(visitID);
+        iot.to(Number(visitID)).emit('arduinodata', body);
+    });  
+});
+
+const iot = new Server({cors: {
+    origin: "*",
+}});
+iot.listen(4000);
+
+iot.on('connection', (socket) => {
+    console.log(`new connection id: ${socket.id}`);
+
+    socket.on('visitconnection', (id) => {
+        console.log(`Mi sono unito alla stanzaaa: ${id}`);
+        socket.join(id);
+    });
+});
 
 //--------------------------------------------------------------------------------------
 app.listen(process.env.EXPRESS_PORT, () => {
