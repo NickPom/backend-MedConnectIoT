@@ -662,6 +662,30 @@ app.post("/updatedevice", auth.authenticateToken, async (req, res) => {
 //--------------------------------------------------------------------------------------
 
 
+app.get('/pairiot', async (req, res) => {
+    
+    //const sql_query = "SELECT id FROM nodo_iot where id=?;";
+    const add_query = "INSERT INTO nodo_iot (id, tipo) VALUES (?, ?)";
+    const name_query = "SELECT persona.id_persona, persona.nome, persona.cognome, td.id AS id_tipologia, abbinato.data_inizio, abbinato.data_fine, nodo_iot.id AS id_device FROM nodo_iot LEFT JOIN (SELECT * FROM abbinato WHERE abbinato.data_fine IS NULL OR abbinato.data_fine >= CURDATE()) AS abbinato ON abbinato.fk_nodo_iot = nodo_iot.id LEFT JOIN tipologia_device td ON nodo_iot.tipo = td.ID LEFT JOIN persona ON abbinato.fk_paziente = persona.id_persona where nodo_iot.id=? AND nodo_iot.tipo=? ORDER BY nodo_iot.id  ASC;";
+
+
+   
+    try {
+        let [abbinamento] = await connection.query(name_query, [req.query.id, req.query.type]);
+        console.log(abbinamento);
+        if(abbinamento.length==1){
+            res.send({abbinamento});
+        }else{
+            await connection.query(add_query, [req.query.id, req.query.type]);
+            res.send({abbinamento: false});
+        }
+        res.status(200).json();
+    } catch (error) {
+        console.error(error);
+        res.status(500).json();
+    }
+});
+
 app.post('/iot', (req, res) => {
     let body = ''; // Variabile per memorizzare il corpo della richiesta
     //console.log(req.query.id);
